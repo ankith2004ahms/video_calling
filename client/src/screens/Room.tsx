@@ -7,70 +7,143 @@ export default function RoomPage() {
     const [myStream, setMyStream] = useState<MediaStream | null>(null);
     const [remoteSocketId, setRemoteSocketId] = useState<string>("");
     const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+    const [isCallActive, setIsCallActive] = useState<boolean>(false);
     const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
 
-    const sendStream = useCallback((stream: MediaStream)=>{
-        peerService.addTrack(stream);
-    },[])
+    // Set up callbacks when component mounts or remote socket changes
+    useEffect(() => {
+        peerService.setOnRemoteStream((stream) => {
+            setRemoteStream(stream);
+            setIsCallActive(true);
+        });
+
+        peerService.setOnIceCandidate((candidate) => {
+            console.log("Generated ICE candidate, remote user:", remoteSocketId);
+            if (remoteSocketId && socket) {
+                socket.emit("ice-candidate", { candidate, to: remoteSocketId });
+            } else {
+                console.warn("Cannot send ICE candidate: no remote user or socket");
+            }
+        });
+    }, [socket, remoteSocketId]);
+
+    // Cleanup local stream on unmount
+    useEffect(() => {
+        return () => {
+            if (myStream) {
+                myStream.getTracks().forEach(track => track.stop());
+            }
+        };
+    }, [myStream]);
+
+    
 
     const handleUserJoined = useCallback((data: any) => {
-        console.log("user joined", data);
-        setRemoteSocketId(data.id);
+        const { id } = data;
+        setRemoteSocketId(id);
+    }, []);
+
+    const handleUserLeft = useCallback((data: any) => {
+        const {  id } = data;
+        if (id === remoteSocketId) {
+            setRemoteSocketId("");
+            setRemoteStream(null);
+            setIsCallActive(false);
+            // Reset peer connection for next call
+            peerService.reset();
+        }
+    }, [remoteSocketId]);
+
+    const handleRoomJoined = useCallback((data: any) => {
+        const {  existingUsers } = data;
+        
+        // If there are existing users, connect to the first one
+        if (existingUsers && existingUsers.length > 0) {
+            const firstUser = existingUsers[0];
+            setRemoteSocketId(firstUser.id);
+        }
     }, []);
 
     const handleCallMade = useCallback(async (data: any) => {
         const { offer, from } = data;
-        console.log("Call made from", from);
 
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        setMyStream(stream);
-        peerService.addTrack(stream);
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            setMyStream(stream);
+            setRemoteSocketId(from);
+            
+            // Add tracks before creating answer
+            peerService.addTrack(stream);
 
-        const answer = await peerService.getAnswer(offer);
-        socket?.emit("make-answer", { answer, to: from });
-        const remote = peerService.getRemoteStream();
-        if (remote) setRemoteStream(remote);
+            const answer = await peerService.getAnswer(offer);
+            if (answer) {
+                socket?.emit("make-answer", { answer, to: from });
+                setIsCallActive(true);
+            } else {
+                console.error("Failed to create answer");
+            }
+        } catch (error) {
+            console.error("Error handling incoming call:", error);
+        }
     }, [socket]);
 
     const handleAnswerMade = useCallback(async (data: any) => {
         const { answer } = data;
-        await peerService.setRemoteAnswer(answer);
-        const remote = peerService.getRemoteStream();
-
-        if (remote) setRemoteStream(remote);
+        
+        try {
+            await peerService.setRemoteAnswer(answer);
+            setIsCallActive(true);
+        } catch (error) {
+            console.error("Error handling answer:", error);
+        }
     }, []);
 
-    const handleNegotiationNeeded = useCallback(async ()=>{
-        const offer = await peerService.getOffer();
-        socket?.emit("make-offer",{offer,to:remoteSocketId});
-    },[remoteSocketId,socket])
+    const handleNegotiationNeeded = useCallback(async () => {
+        console.log("Negotiation needed with:", remoteSocketId);
+        if (!remoteSocketId) return;
+        
+        try {
+            const offer = await peerService.getOffer();
+            if (offer) {
+                socket?.emit("make-offer", { offer, to: remoteSocketId });
+            }
+        } catch (error) {
+            console.error("Error during renegotiation:", error);
+        }
+    }, [remoteSocketId, socket]);
 
     const handleOfferMade = useCallback(async (data: any) => {
         const { offer, from } = data;
-        await peerService.setRemoteOffer(offer);
-        const answer = await peerService.getAnswer(offer);
-        socket?.emit("make-answer", { answer, to: from });
-        const remote = peerService.getRemoteStream();
-        if (remote) setRemoteStream(remote);
-    }, []);
+        
+        try {
+            await peerService.setRemoteOffer(offer);
+            const answer = await peerService.getAnswer(offer);
+            if (answer) {
+                socket?.emit("make-answer", { answer, to: from });
+            }
+        } catch (error) {
+            console.error("Error handling renegotiation offer:", error);
+        }
+    }, [socket]);
 
     useEffect(() => {
-        // Expose a method in peerService to add/remove event listeners safely
         peerService.addNegotiationNeededListener(handleNegotiationNeeded);
         return () => {
             peerService.removeNegotiationNeededListener(handleNegotiationNeeded);
         };
     }, [handleNegotiationNeeded]);
 
-    // OPTIONAL: handle incoming ICE candidate
     const handleIceCandidate = useCallback((data: any) => {
-        peerService.addIceCandidate(data.candidate);
-    }, [])
+        const { candidate } = data;
+        peerService.addIceCandidate(candidate);
+    }, []);
 
     useEffect(() => {
         if (!socket) return;
 
         socket.on("user-joined", handleUserJoined);
+        socket.on("user-left", handleUserLeft);
+        socket.on("joined-room", handleRoomJoined);
         socket.on("call-made", handleCallMade);
         socket.on("answer-made", handleAnswerMade);
         socket.on("ice-candidate", handleIceCandidate);
@@ -78,63 +151,134 @@ export default function RoomPage() {
 
         return () => {
             socket.off("user-joined", handleUserJoined);
+            socket.off("user-left", handleUserLeft);
+            socket.off("joined-room", handleRoomJoined);
             socket.off("call-made", handleCallMade);
             socket.off("answer-made", handleAnswerMade);
             socket.off("ice-candidate", handleIceCandidate);
             socket.off("offer-made", handleOfferMade);
         };
-    }, [socket, handleUserJoined, handleCallMade, handleAnswerMade, handleIceCandidate, handleOfferMade]);
+    }, [socket, handleUserJoined, handleUserLeft, handleRoomJoined, handleCallMade, handleAnswerMade, handleIceCandidate, handleOfferMade]);
 
     const handleCallUser = useCallback(async () => {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        setMyStream(stream);
-        peerService.addTrack(stream);
+        if (!remoteSocketId) {
+            console.error("No remote user to call");
+            return;
+        }
 
-        const offer = await peerService.getOffer();
-        socket?.emit("call-user", { offer, to: remoteSocketId });
+        console.log("Initiating call to:", remoteSocketId);
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            setMyStream(stream);
+            
+            // Add tracks before creating offer
+            peerService.addTrack(stream);
+
+            const offer = await peerService.getOffer();
+            if (offer) {
+                socket?.emit("call-user", { offer, to: remoteSocketId });
+                console.log("Call initiated with offer to:", remoteSocketId);
+            } else {
+                console.error("Failed to create offer for call");
+            }
+        } catch (error) {
+            console.error("Error initiating call:", error);
+        }
     }, [remoteSocketId, socket]);
 
+    // Update remote video element when remote stream changes
     useEffect(() => {
         if (remoteVideoRef.current && remoteStream) {
             remoteVideoRef.current.srcObject = remoteStream;
         }
     }, [remoteStream]);
 
+    
+
     return (
-        <div>
-            <h1>Room</h1>
-            <h4>{remoteSocketId ? "Connected to user" : "Waiting for user to join"}</h4>
-            {remoteSocketId && (
-                <button onClick={handleCallUser}>Call User</button>
-            )}
-            {myStream && <button onClick={()=>sendStream(myStream)}>Send Stream</button>}
-            {myStream && (
-                <div>
-                    <h5>My Stream</h5>
-                    <video
-                        style={{ width: "300px", height: "200px", marginRight: "20px" }}
-                        autoPlay
-                        playsInline
-                        muted
-                        ref={videoElement => {
-                            if (videoElement && myStream) {
-                                videoElement.srcObject = myStream;
-                            }
-                        }}
-                    />
-                </div>
-            )}
-            {remoteStream && (
-                <div>
-                    <h5>Remote Stream</h5>
-                    <video
-                        style={{ width: "300px", height: "200px" }}
-                        autoPlay
-                        playsInline
-                        ref={remoteVideoRef}
-                    />
-                </div>
-            )}
+        <div style={{ padding: "20px" }}>
+            <h1>Video Call Room</h1>
+            <h4>
+                {remoteSocketId ? 
+                    `Connected to user: ${remoteSocketId}` : 
+                    "Waiting for user to join..."
+                }
+            </h4>
+            
+            <div style={{ marginBottom: "20px" }}>
+                {remoteSocketId && !isCallActive && (
+                    <button onClick={handleCallUser} style={{ 
+                        backgroundColor: "#007bff", 
+                        color: "white", 
+                        padding: "10px 20px", 
+                        border: "none", 
+                        borderRadius: "5px",
+                        cursor: "pointer"
+                    }}>
+                        Start Video Call
+                    </button>
+                )}
+                
+            </div>
+
+            <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
+                {myStream && (
+                    <div>
+                        <h5>My Video</h5>
+                        <video
+                            style={{ 
+                                width: "300px", 
+                                height: "200px", 
+                                border: "2px solid #007bff",
+                                borderRadius: "8px"
+                            }}
+                            autoPlay
+                            playsInline
+                            muted
+                            ref={videoElement => {
+                                if (videoElement && myStream) {
+                                    videoElement.srcObject = myStream;
+                                }
+                            }}
+                        />
+                    </div>
+                )}
+                
+                {remoteStream ? (
+                    <div>
+                        <h5>Remote Video</h5>
+                        <video
+                            style={{ 
+                                width: "300px", 
+                                height: "200px",
+                                border: "2px solid #28a745",
+                                borderRadius: "8px"
+                            }}
+                            autoPlay
+                            playsInline
+                            ref={remoteVideoRef}
+                        />
+                    </div>
+                ) : (
+                    <div>
+                        <h5>Remote Video</h5>
+                        <div style={{ 
+                            width: "300px", 
+                            height: "200px",
+                            border: "2px dashed #6c757d",
+                            borderRadius: "8px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "#6c757d"
+                        }}>
+                            {remoteSocketId ? "Waiting for remote video..." : "No remote user connected"}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            
         </div>
     );
 }
