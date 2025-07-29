@@ -1,0 +1,14 @@
+{
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@types/cors": "^2.8.19",
+    "cors": "^2.8.5",
+    "socket.io": "^4.8.1"
+  },
+  "scripts": {
+    "start": "ts-node src/index.ts",
+    "dev": "npx tsc && cd dist && node index.js"
+  }
+}
