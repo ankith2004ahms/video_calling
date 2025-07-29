@@ -9,6 +9,10 @@ export default function RoomPage() {
     const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
     const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
 
+    const sendStream = useCallback((stream: MediaStream)=>{
+        peerService.addTrack(stream);
+    },[])
+
     const handleUserJoined = useCallback((data: any) => {
         console.log("user joined", data);
         setRemoteSocketId(data.id);
@@ -103,6 +107,7 @@ export default function RoomPage() {
             {remoteSocketId && (
                 <button onClick={handleCallUser}>Call User</button>
             )}
+            {myStream && <button onClick={()=>sendStream(myStream)}>Send Stream</button>}
             {myStream && (
                 <div>
                     <h5>My Stream</h5>
