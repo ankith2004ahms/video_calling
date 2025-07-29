@@ -1,14 +1,18 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useSocket } from "../context/SocketProvider";
 import peerService from "../services/peer";
+import { useNavigate } from "react-router-dom";
 
 export default function RoomPage() {
+    const navigate = useNavigate();
     const socket = useSocket();
     const [myStream, setMyStream] = useState<MediaStream | null>(null);
     const [remoteSocketId, setRemoteSocketId] = useState<string>("");
     const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
     const [isCallActive, setIsCallActive] = useState<boolean>(false);
     const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
+    const [isMuted, setIsMuted] = useState(false);
+    const [isVideoOn, setIsVideoOn] = useState(true);
 
     // Set up callbacks when component mounts or remote socket changes
     useEffect(() => {
@@ -41,7 +45,44 @@ export default function RoomPage() {
     const handleUserJoined = useCallback((data: any) => {
         const { id } = data;
         setRemoteSocketId(id);
-    }, []);
+    }, [setRemoteSocketId]);
+    
+    const handleMute = useCallback(() => {
+        if (myStream) {
+            myStream.getAudioTracks().forEach(track => {
+                track.enabled = !track.enabled;
+            });
+        }
+        setIsMuted(prev=>!prev);
+    }, [myStream]);
+
+    const handleVideoToggle = useCallback(()=>{
+        if(myStream){
+            myStream.getVideoTracks().forEach(track=>{
+                track.enabled = !track.enabled;
+            });
+        }
+        setIsVideoOn(prev=>!prev);
+    },[myStream]);
+
+    const hangUp = useCallback(() => {
+        // Stop local stream
+        if (myStream) {
+            myStream.getTracks().forEach(track => track.stop());
+            setMyStream(null);
+        }
+        
+        // Reset states
+        setRemoteStream(null);
+        setIsCallActive(false);
+        setRemoteSocketId("");
+        
+        // Reset peer service
+        peerService.reset();
+        
+        // Optionally navigate back to lobby
+        navigate("/join");
+    }, [myStream]);
 
     const handleUserLeft = useCallback((data: any) => {
         const {  id } = data;
@@ -249,8 +290,8 @@ export default function RoomPage() {
                         <h5>Remote Video</h5>
                         <video
                             style={{ 
-                                width: "300px", 
-                                height: "200px",
+                                width: "400px", 
+                                height: "600px",
                                 border: "2px solid #28a745",
                                 borderRadius: "8px"
                             }}
@@ -263,8 +304,8 @@ export default function RoomPage() {
                     <div>
                         <h5>Remote Video</h5>
                         <div style={{ 
-                            width: "300px", 
-                            height: "200px",
+                            width: "400px", 
+                            height: "600px",
                             border: "2px dashed #6c757d",
                             borderRadius: "8px",
                             display: "flex",
@@ -276,6 +317,27 @@ export default function RoomPage() {
                         </div>
                     </div>
                 )}
+            </div>
+            <div style={{ marginTop: "20px" }}>
+                <button onClick={handleMute} style={{
+                    backgroundColor: "#007bff",
+                }}>
+                    {isMuted ? "Unmute" : "Mute"}
+                </button>
+            </div>
+            <div style={{ marginTop: "20px" }}>
+                <button onClick={handleVideoToggle} style={{
+                    backgroundColor: "#007bff",
+                }}>
+                    {isVideoOn ? "Turn Off Video" : "Turn On Video"}
+                </button>
+            </div>
+            <div style={{ marginTop: "20px" }}>
+                <button onClick={hangUp} style={{
+                    backgroundColor: "#dc3545",
+                }}>
+                    Hang Up
+                </button>
             </div>
 
             
