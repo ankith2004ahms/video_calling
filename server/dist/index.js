@@ -13,10 +13,8 @@ const emailToSocketMap = new Map();
 const socketToEmailMap = new Map();
 const socketToRoomMap = new Map();
 io.on("connection", (socket) => {
-    console.log(`User connected: ${socket.id}`);
     socket.on("join-room", (data) => {
         const { email, room } = data;
-        console.log(`${email} joining room ${room}`);
         // Store mappings
         emailToSocketMap.set(email, socket.id);
         socketToEmailMap.set(socket.id, email);
@@ -34,12 +32,10 @@ io.on("connection", (socket) => {
         })).filter(user => user.email); // Filter out any undefined emails
         // Confirm room join to the user
         socket.emit("joined-room", { email, room, existingUsers: roomUsers });
-        console.log(`Room ${room} now has ${existingUsers.length + 1} users`);
     });
     socket.on("call-user", (data) => {
         const { offer, to } = data;
         const from = socketToEmailMap.get(socket.id);
-        console.log(`Call from ${from} (${socket.id}) to ${to}`);
         if (from) {
             io.to(to).emit("call-made", { offer, from: socket.id });
         }
@@ -47,7 +43,6 @@ io.on("connection", (socket) => {
     socket.on("make-answer", (data) => {
         const { answer, to } = data;
         const from = socketToEmailMap.get(socket.id);
-        console.log(`Answer from ${from} (${socket.id}) to ${to}`);
         if (from) {
             io.to(to).emit("answer-made", { answer, from: socket.id });
         }
@@ -55,7 +50,6 @@ io.on("connection", (socket) => {
     socket.on("make-offer", (data) => {
         const { offer, to } = data;
         const from = socketToEmailMap.get(socket.id);
-        console.log(`Offer from ${from} (${socket.id}) to ${to}`);
         if (from) {
             io.to(to).emit("offer-made", { offer, from: socket.id });
         }
@@ -63,13 +57,11 @@ io.on("connection", (socket) => {
     socket.on("ice-candidate", (data) => {
         const { candidate, to } = data;
         const from = socketToEmailMap.get(socket.id);
-        console.log(`ICE candidate from ${from} (${socket.id}) to ${to}`);
         if (from) {
             io.to(to).emit("ice-candidate", { candidate, from: socket.id });
         }
     });
     socket.on("disconnect", () => {
-        console.log(`User disconnected: ${socket.id}`);
         const email = socketToEmailMap.get(socket.id);
         const room = socketToRoomMap.get(socket.id);
         if (email && room) {
