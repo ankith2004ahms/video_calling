@@ -1,14 +1,16 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Lobby from "./screens/Lobby";
+import Lobby from "./pages/Lobby";
 import { SocketProvider } from "./context/SocketProvider";
-import RoomPage from "./screens/Room";
+import RoomPage from "./pages/Room";
+import Home from "./pages/Home";
 
 export default function App(){
   return(
     <BrowserRouter>
       <SocketProvider>
         <Routes>
-          <Route path="/" element={<Lobby />} />  
+          <Route path="/" element={<Home />} />
+          <Route path="/join" element={<Lobby />} />  
           <Route path="/room" element={<RoomPage />} />
         </Routes>
       </SocketProvider>
