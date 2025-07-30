@@ -9,7 +9,11 @@ export const useSocket = ()=>{
 }
 export const SocketProvider = ({children}:{children:React.ReactNode})=>{
     const socket = useMemo(()=>{
-        const newSocket = io("http://localhost:8000");
+        const newSocket = io("http://localhost:8000",{
+            extraHeaders: {
+                "ngrok-skip-browser-warning": "true"
+            }
+        });
         return newSocket;
     },[])
 

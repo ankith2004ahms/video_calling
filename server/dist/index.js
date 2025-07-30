@@ -2,7 +2,11 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const socket_io_1 = require("socket.io");
 const corsOptions = {
-    origin: "http://localhost:5173",
+    origin: [
+        "http://localhost:5173",
+        "https://879e84f8c67c.ngrok-free.app",
+        "*"
+    ],
     methods: ["GET", "POST"],
     credentials: true,
 };
@@ -72,5 +76,19 @@ io.on("connection", (socket) => {
         }
         socketToEmailMap.delete(socket.id);
         socketToRoomMap.delete(socket.id);
+    });
+    socket.on("hang-up", (data) => {
+        const { room } = data;
+        const email = socketToEmailMap.get(socket.id);
+        if (email && room) {
+            socket.to(room).emit("user-hung-up", { email, id: socket.id });
+        }
+    });
+    socket.on("send-message", (data) => {
+        const { message, to } = data;
+        const from = socketToEmailMap.get(socket.id);
+        if (from) {
+            io.to(to).emit("receive-message", { message, from: socket.id });
+        }
     });
 });
