@@ -5,6 +5,8 @@ const corsOptions = {
     origin: [
         "http://localhost:5173",
         "https://879e84f8c67c.ngrok-free.app",
+        "https://20edd27da997.ngrok-free.app",
+        "https://98af8a197059.ngrok-free.app",
         "*"
     ],
     methods: ["GET", "POST"],
@@ -19,22 +21,16 @@ const socketToRoomMap = new Map();
 io.on("connection", (socket) => {
     socket.on("join-room", (data) => {
         const { email, room } = data;
-        // Store mappings
         emailToSocketMap.set(email, socket.id);
         socketToEmailMap.set(socket.id, email);
         socketToRoomMap.set(socket.id, room);
-        // Get all users currently in the room (before this user joins)
         const existingUsers = Array.from(io.sockets.adapter.rooms.get(room) || []);
-        // Join the room
         socket.join(room);
-        // Notify existing users about the new user
         socket.to(room).emit("user-joined", { email, id: socket.id });
-        // Send current room users to the newly joined user
         const roomUsers = existingUsers.map(socketId => ({
             email: socketToEmailMap.get(socketId),
             id: socketId
-        })).filter(user => user.email); // Filter out any undefined emails
-        // Confirm room join to the user
+        })).filter(user => user.email);
         socket.emit("joined-room", { email, room, existingUsers: roomUsers });
     });
     socket.on("call-user", (data) => {

@@ -31,11 +31,9 @@ export default function RoomPage() {
   const [message, setMessage] = useState<string>("");
   const [remoteMessages, setRemoteMessages] = useState<string[]>([]);
 
-  // Get room name from URL
   const urlParams = new URLSearchParams(window.location.search);
   const roomName = urlParams.get('room') || 'Unknown Room';
 
-  // Set up callbacks when component mounts or remote socket changes
   useEffect(() => {
     peerService.setOnRemoteStream((stream) => {
       setRemoteStream(stream);
@@ -52,7 +50,6 @@ export default function RoomPage() {
     });
   }, [socket, remoteSocketId]);
 
-  // Cleanup local stream on unmount
   useEffect(() => {
     return () => {
       if (myStream) {
@@ -88,30 +85,24 @@ export default function RoomPage() {
   }, [myStream]);
 
   const hangUp = useCallback(() => {
-    // Get current room from URL params
     const urlParams = new URLSearchParams(window.location.search);
     const currentRoom = urlParams.get('room');
     
-    // Emit hang-up event to notify other users
     if (currentRoom && socket) {
         socket.emit("hang-up", { room: currentRoom });
     }
     
-    // Stop local stream
     if (myStream) {
         myStream.getTracks().forEach(track => track.stop());
         setMyStream(null);
     }
     
-    // Reset states
     setRemoteStream(null);
     setIsCallActive(false);
     setRemoteSocketId("");
     
-    // Reset peer service
     peerService.reset();
     
-    // Navigate back to lobby
     navigate("/join");
 }, [myStream, socket, navigate]);
 
@@ -122,7 +113,6 @@ export default function RoomPage() {
         setRemoteSocketId("");
         setRemoteStream(null);
         setIsCallActive(false);
-        // Reset peer connection for next call
         peerService.reset();
       }
     },
@@ -132,7 +122,6 @@ export default function RoomPage() {
   const handleRoomJoined = useCallback((data: any) => {
     const { existingUsers } = data;
 
-    // If there are existing users, connect to the first one
     if (existingUsers && existingUsers.length > 0) {
       const firstUser = existingUsers[0];
       setRemoteSocketId(firstUser.id);
@@ -151,7 +140,6 @@ export default function RoomPage() {
         setMyStream(stream);
         setRemoteSocketId(from);
 
-        // Add tracks before creating answer
         peerService.addTrack(stream);
 
         const answer = await peerService.getAnswer(offer);
@@ -180,21 +168,17 @@ export default function RoomPage() {
   }, []);
 
   const handleUserHungUp = useCallback(() => {
-    // Stop local stream
     if (myStream) {
         myStream.getTracks().forEach(track => track.stop());
         setMyStream(null);
     }
     
-    // Reset states
     setRemoteStream(null);
     setIsCallActive(false);
     setRemoteSocketId("");
     
-    // Reset peer service
     peerService.reset();
     
-    // Navigate back to lobby
     navigate("/join");
 }, [myStream, navigate]);
 
