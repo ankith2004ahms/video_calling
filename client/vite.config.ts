@@ -12,7 +12,7 @@ export default defineConfig({
     },
   },
   server: {
-    allowedHosts: ["879e84f8c67c.ngrok-free.app","20edd27da997.ngrok-free.app","98af8a197059.ngrok-free.app","https://video-calling-4jqj.onrender.com]"],
+    allowedHosts: ["879e84f8c67c.ngrok-free.app","20edd27da997.ngrok-free.app","98af8a197059.ngrok-free.app","https://video-calling-dhd0.onrender.com]"],
     port: 5173,
   },
 });
