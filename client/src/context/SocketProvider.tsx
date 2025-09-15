@@ -9,7 +9,7 @@ export const useSocket = ()=>{
 }
 export const SocketProvider = ({children}:{children:React.ReactNode})=>{
     const socket = useMemo(()=>{
-        const newSocket = io("https://video-calling-4jqj.onrender.com",{
+        const newSocket = io("https://video-calling-dhd0.onrender.com",{
             extraHeaders: {
                 "ngrok-skip-browser-warning": "true"
             }
